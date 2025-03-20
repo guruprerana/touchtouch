@@ -1,1 +1,12 @@
 digit-interface
+torch
+torchvision
+numpy
+matplotlib
+wandb
+transformers[torch]
+safetensors
+datasets
+ipywidgets
+huggingface_hub
+scikit-learn
