@@ -10,3 +10,16 @@ datasets
 ipywidgets
 huggingface_hub
 scikit-learn
+xformers
+hydra-core
+hydra-colorlog
+wandb
+einops
+tqdm
+scipy
+scikit-learn
+opencv-python
+h5py
+rich
+lightning
+ipykernel
