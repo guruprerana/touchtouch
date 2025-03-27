@@ -1,0 +1,3 @@
+[submodule "sparsh"]
+	path = sparsh
+	url = https://github.com/facebookresearch/sparsh
