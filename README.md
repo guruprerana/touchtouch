@@ -10,4 +10,4 @@ python version 3.9
 - https://arxiv.org/pdf/1805.11085
 - https://sparsh-ssl.github.io/
 
-`HYDRA_FULL_ERROR=1 python train_task.py --config-name=experiment/downstream_task/port/digit_mae paths=touchtouch wandb=guru`
+`python train_task.py --config-name=experiment/downstream_task/port/digit_mae paths=touchtouch wandb=guru`
