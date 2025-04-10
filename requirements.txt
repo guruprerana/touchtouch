@@ -21,5 +21,6 @@ scikit-learn
 opencv-python
 h5py
 rich
-lightning
+# lightning
+lightning==2.0.9
 ipykernel
