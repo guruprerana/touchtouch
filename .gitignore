@@ -177,3 +177,8 @@ venv*
 pretrained_models*
 wandb*
 results*
+
+sparsh_models*
+experiments*
+tacbench*
+outputs*
