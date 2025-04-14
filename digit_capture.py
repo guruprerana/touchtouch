@@ -40,7 +40,7 @@ fps_30 = Digit.STREAMS["QVGA"]["fps"]["30fps"]
 digit.set_fps(fps_30)
 
 # Grab single frame from DIGIT
-filepath = "objects/usb_cable"
+filepath = "data/objects/styrofoam"
 
 while True:
         frame = digit.get_frame()
@@ -63,7 +63,7 @@ cv2.destroyAllWindows()
 digit.disconnect()
 
 # Find a Digit by serial number and connect manually
-digit = DigitHandler.find_digit("D20118")
+digit = DigitHandler.find_digit("D20140")
 pprint.pprint(digit)
 cap = cv2.VideoCapture(digit["dev_name"])
 cap.release()
