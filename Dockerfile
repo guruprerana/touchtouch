@@ -41,3 +41,4 @@ RUN python3.10 -m pip install --no-cache-dir -r requirements.txt
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 ENV HYDRA_FULL_ERROR 1
+ENV CUDA_VISIBLE_DEVICES "0,1,2,3"
