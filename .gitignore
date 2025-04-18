@@ -182,3 +182,6 @@ sparsh_models*
 experiments*
 tacbench*
 outputs*
+data/digit-force-estimation*
+.vscode
+test.py

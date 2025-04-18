@@ -11,3 +11,4 @@ python version 3.9
 - https://sparsh-ssl.github.io/
 
 `python train_task.py --config-name=experiment/downstream_task/port/digit_mae paths=touchtouch wandb=guru`
+`python train_task.py --config-name=experiment/downstream_task/force/digit_mae paths=touchtouch wandb=guru`
