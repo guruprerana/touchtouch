@@ -86,6 +86,9 @@ class VitForceEstimation:
             
             # Move model to device
             self.model = self.model.to(self.device)
+            if torch.cuda.device_count() > 1:
+                logger.info(f"Using {torch.cuda.device_count()} GPUs!")
+                self.model = nn.DataParallel(self.model)
         except Exception as e:
             logger.error(f"Failed to initialize model: {str(e)}")
             raise
