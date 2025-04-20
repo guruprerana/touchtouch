@@ -13,6 +13,7 @@ from torch.utils import data
 import torchvision.transforms.functional as TF
 from torchvision import transforms
 import matplotlib.pyplot as plt
+import wandb
 
 from sparsh.tactile_ssl.data.digit.utils import (
     load_dataset_forces,
@@ -29,8 +30,8 @@ DEBUG = False
 # config comes from sparsh/config/data/digit_force.yaml
 config = OmegaConf.create({
     "remove_bg": True,
-    "out_format": "single_image",
-    "num_frames": 1,
+    "out_format": "concat_ch_img",
+    "num_frames": 2,
     "frame_stride": 5,
     "sensor": "digit",
     "path_dataset": "data/digit-force-estimation/",
@@ -43,6 +44,7 @@ config = OmegaConf.create({
     "max_abs_forceXYZ": [4.0, 4.0, 5.0], # N (if need to assign different values for each dataset, use sphere_max_abs_forceXYZ, sharp_max_abs_forceXYZ, hex_max_abs_forceXYZ)
     "max_delta_forceXYZ": [0.25, 0.25, 0.15], #N
     "slip_horizon": 0,
+    "train_data_budget": 0.1, # fraction of train dataset to use (between 0 and 1)
     "list_datasets": [
       "sphere/batch_1",
       "sharp/batch_1",
@@ -99,7 +101,10 @@ class VisionForceSlipDataset(data.Dataset):
 
         # transforms
         self.img_sz = self.config.transforms.resize
-        self.transform_resize = get_resize_transform(self.img_sz)
+        if self.out_format == "concat_ch_img" and self.num_frames == 2:
+            self.transform_resize = get_resize_transform([int(self.img_sz[0]/2), self.img_sz[1]])
+        else:
+            self.transform_resize = get_resize_transform(self.img_sz)
 
         # background
         self.bg = None
@@ -148,8 +153,8 @@ class VisionForceSlipDataset(data.Dataset):
         return len(self.trajectories[idx_trajectory])
 
     def __getitem__(self, idx):
-        idx_trajectory = self.idx2traj[idx]["trajectory"]
-        idx_sample = self.idx2traj[idx]["sample"]
+        idx_trajectory = self.idx2traj[int(idx)]["trajectory"]
+        idx_sample = self.idx2traj[int(idx)]["sample"]
         label, abs_force, delta_force = self._get_force_slip_labels(idx, idx_trajectory, idx_sample)
 
         try:
@@ -172,7 +177,7 @@ class VisionForceSlipDataset(data.Dataset):
         We use the slip horizon labels to debounce fast switches in slip events, which is likely noise
         if there is atleast one slip event in the window the whole window is considered as slipping
         '''
-        slip_horizon_labels = self.idx2traj[idx]["slip_horizon_labels"]
+        slip_horizon_labels = self.idx2traj[int(idx)]["slip_horizon_labels"]
         label = 0 if slip_horizon_labels.sum() == 0 else 1
 
         len_trajectory = len(self.trajectories[idx_trajectory]["indexes"])
@@ -219,7 +224,7 @@ class VisionForceSlipDataset(data.Dataset):
             output = torch.stack(sample_images, dim=0)
             output = output.permute(1, 0, 2, 3)
         elif self.out_format == "concat_ch_img":
-            output = torch.cat(sample_images, dim=0)
+            output = torch.cat(sample_images, dim=1)
         return output
 
     def _getitem_trajectory(self, idx_trajectory, idx_sample):
@@ -253,7 +258,16 @@ def load_forceslip_datasets():
     for dataset in config.list_datasets:
         train.append(VisionForceSlipDataset(config, dataset))
 
-    train_dataset = data.ConcatDataset(train)
+    full_train_dataset = data.ConcatDataset(train)
+    
+    # Apply train data budget
+    train_data_budget = config.train_data_budget
+    if train_data_budget < 1.0:
+        train_size = int(len(full_train_dataset) * train_data_budget)
+        indices = torch.randperm(len(full_train_dataset))[:train_size]
+        train_dataset = data.Subset(full_train_dataset, indices)
+    else:
+        train_dataset = full_train_dataset
 
     # load test datasets
     test = []
@@ -261,5 +275,11 @@ def load_forceslip_datasets():
         test.append(VisionForceSlipDataset(config, dataset))
 
     test_dataset = data.ConcatDataset(test)
+
+    wandb.log({
+        "config": OmegaConf.to_yaml(config),
+        "train_data_size": len(train_dataset),
+        "test_data_size": len(test_dataset),
+    })
 
     return train_dataset, test_dataset

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from transformers import ViTForImageClassification, ViTConfig, get_linear_schedule_with_warmup
+from transformers import ConvNextForImageClassification, ConvNextConfig, get_linear_schedule_with_warmup
 import argparse
 import os
 import logging
@@ -17,25 +17,12 @@ from force_estimation.data import load_forceslip_datasets
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class VitForceEstimation:
+class ConvNextForceEstimation:
     def __init__(self, args):
-        """Initialize the ViT model for force estimation."""
+        """Initialize the ConvNext model for force estimation."""
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f"Using device: {self.device}")
-
-        # Initialize wandb if requested
-        if self.args.use_wandb:
-            # Create the output directory if it doesn't exist yet
-            os.makedirs(self.args.output_dir, exist_ok=True)
-            
-            # Initialize wandb with the output directory as the logging directory
-            wandb.init(
-                project=self.args.wandb_project, 
-                name=self.args.wandb_run_name,
-                dir=self.args.output_dir  # Set wandb logs to be saved in the output directory
-            )
-            wandb.config.update(vars(self.args))
         
         # Load datasets
         self.train_dataset, self.test_dataset = load_forceslip_datasets()
@@ -56,12 +43,12 @@ class VitForceEstimation:
             pin_memory=True
         )
         
-        # Initialize ViT model
+        # Initialize ConvNext model
         self._init_model()
         
         # Set up optimizer and loss function
         self.optimizer = optim.AdamW(self.model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-        # Changed from MSE to Smooth L1 Loss for training
+        # Using Smooth L1 Loss for training
         self.criterion = nn.SmoothL1Loss(beta=0.2)
         
         # Learning rate scheduler
@@ -77,15 +64,16 @@ class VitForceEstimation:
         self.patience_counter = 0
     
     def _init_model(self):
-        """Initialize the ViT model."""
+        """Initialize the ConvNext model."""
         logger.info(f"Loading pretrained model: {self.args.model_name}")
         try:
-            # Load pretrained ViT model
-            self.model = ViTForImageClassification.from_pretrained(self.args.model_name)
+            # Load pretrained ConvNext model
+            self.model = ConvNextForImageClassification.from_pretrained(self.args.model_name)
 
             # Freeze all parameters of the base model
-            for param in self.model.vit.parameters():
-                param.requires_grad = False
+            for name, param in self.model.named_parameters():
+                if 'classifier' not in name:  # Freeze everything except the classifier
+                    param.requires_grad = False
             
             # Modify the classifier head to output 3 values for force estimation
             num_features = self.model.classifier.in_features
@@ -95,7 +83,7 @@ class VitForceEstimation:
                 nn.Dropout(0.1),
                 nn.Linear(256, 3)  # 3 for force XYZ
             )
-            logger.info("Model architecture modified for force estimation")
+            logger.info("ConvNext model architecture modified for force estimation")
             
             # Move model to device
             self.model = self.model.to(self.device)
@@ -280,10 +268,23 @@ class VitForceEstimation:
         """Run the full finetuning process."""
         logger.info("Starting finetuning process")
         
+        # Initialize wandb if requested
+        if self.args.use_wandb:
+            # Create the output directory if it doesn't exist yet
+            os.makedirs(self.args.output_dir, exist_ok=True)
+            
+            # Initialize wandb with the output directory as the logging directory
+            wandb.init(
+                project=self.args.wandb_project, 
+                name=self.args.wandb_run_name,
+                dir=self.args.output_dir  # Set wandb logs to be saved in the output directory
+            )
+            wandb.config.update(vars(self.args))
+        
         # Resume from checkpoint if specified
         if self.args.resume_from:
             self.load_model(self.args.resume_from)
-
+        
         for epoch in range(1, self.args.num_epochs + 1):
             train_loss = self.train_epoch(epoch)
             val_loss = self.evaluate(epoch)
@@ -318,12 +319,12 @@ def parse_args():
     """Parse command-line arguments."""
     # Create a timestamp for the default output directory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    default_output_dir = f"experiments/{timestamp}_vit_force_estimation"
+    default_output_dir = f"experiments/{timestamp}_convnext_force_estimation"
     
-    parser = argparse.ArgumentParser(description="Finetune ViT for force estimation")
+    parser = argparse.ArgumentParser(description="Finetune ConvNext for force estimation")
     
-    parser.add_argument("--model_name", type=str, default="google/vit-base-patch16-224-in21k",
-                        help="Name of the pretrained ViT model to use")
+    parser.add_argument("--model_name", type=str, default="facebook/convnext-base-224-22k",
+                        help="Name of the pretrained ConvNext model to use")
     parser.add_argument("--batch_size", type=int, default=64,
                         help="Batch size for training")
     parser.add_argument("--num_epochs", type=int, default=30,
@@ -346,9 +347,9 @@ def parse_args():
                         help="Path to a checkpoint to resume training from")
     parser.add_argument("--use_wandb", action="store_true", default=True,
                         help="Whether to use Weights & Biases for logging")
-    parser.add_argument("--wandb_project", type=str, default="tactile_force_estimation_vit",
+    parser.add_argument("--wandb_project", type=str, default="tactile_force_estimation_convnext",
                         help="W&B project name")
-    parser.add_argument("--wandb_run_name", type=str, default="vit-force-estimation",
+    parser.add_argument("--wandb_run_name", type=str, default="convnext-force-estimation",
                         help="W&B run name")
     
     return parser.parse_args()
@@ -362,8 +363,8 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     
     # Initialize and run the finetuning
-    vit_force = VitForceEstimation(args)
-    vit_force.finetune()
+    convnext_force = ConvNextForceEstimation(args)
+    convnext_force.finetune()
 
 
 if __name__ == "__main__":
