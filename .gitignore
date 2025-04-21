@@ -177,6 +177,7 @@ venv*
 pretrained_models*
 wandb*
 results*
+logs*
 
 sparsh_models*
 experiments*
