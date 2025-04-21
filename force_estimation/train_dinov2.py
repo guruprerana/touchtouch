@@ -7,7 +7,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from transformers import ViTForImageClassification, ViTConfig, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
+# Add import for DINOv2
+from transformers import AutoImageProcessor, AutoModel
 import argparse
 import logging
 from tqdm import tqdm
@@ -22,9 +24,9 @@ from sparsh.tactile_ssl.downstream_task.attentive_pooler import AttentivePooler
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class VitForceEstimation:
+class DinoV2ForceEstimation:
     def __init__(self, args):
-        """Initialize the ViT model for force estimation."""
+        """Initialize the DINOv2 model for force estimation."""
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         logger.info(f"Using device: {self.device}")
@@ -61,7 +63,7 @@ class VitForceEstimation:
             pin_memory=True
         )
         
-        # Initialize ViT model
+        # Initialize DINOv2 model
         self._init_model()
         
         # Set up optimizer and loss function
@@ -88,22 +90,19 @@ class VitForceEstimation:
         self.patience_counter = 0
     
     def _init_model(self):
-        """Initialize the ViT model."""
+        """Initialize the DINOv2 model."""
         logger.info(f"Loading pretrained model: {self.args.model_name}")
         try:
-            # Load pretrained ViT model
-            self.model = ViTForImageClassification.from_pretrained(self.args.model_name)
+            # Load DINOv2 model
+            self.processor = AutoImageProcessor.from_pretrained(self.args.model_name)
+            self.model = AutoModel.from_pretrained(self.args.model_name)
 
             # Freeze all parameters of the base model
-            for param in self.model.vit.parameters():
+            for param in self.model.parameters():
                 param.requires_grad = False
             
             # Get the embedding dimension from the model
-            num_features = self.model.classifier.in_features
-            
-            # Replace the classifier with an AttentivePooler-based classifier
-            # First, remove the original classifier to avoid confusion
-            self.model.classifier = nn.Identity()
+            num_features = self.model.config.hidden_size
             
             # Add AttentivePooler
             self.attentive_pooler = AttentivePooler(
@@ -125,11 +124,6 @@ class VitForceEstimation:
             self.attentive_pooler = self.attentive_pooler.to(self.device)
             self.force_probe = self.force_probe.to(self.device)
             
-            # if torch.cuda.device_count() > 1:
-            #     logger.info(f"Using {torch.cuda.device_count()} GPUs!")
-            #     self.model = nn.DataParallel(self.model)
-            #     self.attentive_pooler = nn.DataParallel(self.attentive_pooler)
-            #     self.force_probe = nn.DataParallel(self.force_probe)
         except Exception as e:
             logger.error(f"Failed to initialize model: {str(e)}")
             raise
@@ -150,8 +144,9 @@ class VitForceEstimation:
             # Zero the parameter gradients
             self.optimizer.zero_grad()
             
-            # Forward
-            features = self.model(images).logits  # Get features from ViT
+            # Forward - DINOv2 outputs are different from ViT
+            outputs = self.model(images)
+            features = outputs.last_hidden_state[:, 0]  # Use [CLS] token or equivalent
             
             # Reshape features from [batch_size, features] to [batch_size, 1, features]
             # to provide the expected 3D input for the attention mechanism
@@ -223,7 +218,9 @@ class VitForceEstimation:
                 force_scale = batch["force_scale"].to(self.device)
                 forces = batch["force"].to(self.device) * force_scale
                 
-                features = self.model(images).logits  # Get features from ViT
+                # Forward - DINOv2 outputs are different from ViT
+                outputs = self.model(images)
+                features = outputs.last_hidden_state[:, 0]  # Use [CLS] token or equivalent
                 
                 # Reshape features from [batch_size, features] to [batch_size, 1, features]
                 # to provide the expected 3D input for the attention mechanism
@@ -370,12 +367,12 @@ def parse_args():
     """Parse command-line arguments."""
     # Create a timestamp for the default output directory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    default_output_dir = f"experiments/{timestamp}_vit_force_estimation"
+    default_output_dir = f"experiments/{timestamp}_dinov2_force_estimation"
     
-    parser = argparse.ArgumentParser(description="Finetune ViT for force estimation")
+    parser = argparse.ArgumentParser(description="Finetune DINOv2 for force estimation")
     
-    parser.add_argument("--model_name", type=str, default="google/vit-base-patch16-224-in21k",
-                        help="Name of the pretrained ViT model to use")
+    parser.add_argument("--model_name", type=str, default="facebook/dinov2-base",
+                        help="Name of the pretrained DINOv2 model to use")
     parser.add_argument("--batch_size", type=int, default=64,
                         help="Batch size for training")
     parser.add_argument("--num_epochs", type=int, default=30,
@@ -398,9 +395,9 @@ def parse_args():
                         help="Path to a checkpoint to resume training from")
     parser.add_argument("--use_wandb", action="store_true", default=True,
                         help="Whether to use Weights & Biases for logging")
-    parser.add_argument("--wandb_project", type=str, default="tactile_force_estimation_vit",
+    parser.add_argument("--wandb_project", type=str, default="tactile_force_estimation_dinov2",
                         help="W&B project name")
-    parser.add_argument("--wandb_run_name", type=str, default="vit-force-estimation",
+    parser.add_argument("--wandb_run_name", type=str, default="dinov2-force-estimation",
                         help="W&B run name")
     
     return parser.parse_args()
@@ -414,7 +411,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     
     # Initialize and run the finetuning
-    vit_force = VitForceEstimation(args)
+    vit_force = DinoV2ForceEstimation(args)
     vit_force.finetune()
 
 
