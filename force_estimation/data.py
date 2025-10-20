@@ -44,7 +44,7 @@ config = OmegaConf.create({
     "max_abs_forceXYZ": [4.0, 4.0, 5.0], # N (if need to assign different values for each dataset, use sphere_max_abs_forceXYZ, sharp_max_abs_forceXYZ, hex_max_abs_forceXYZ)
     "max_delta_forceXYZ": [0.25, 0.25, 0.15], #N
     "slip_horizon": 0,
-    "train_data_budget": 0.1, # fraction of train dataset to use (between 0 and 1)
+    "train_data_budget": 0.01, # fraction of train dataset to use (between 0 and 1)
     "list_datasets": [
       "sphere/batch_1",
       "sharp/batch_1",

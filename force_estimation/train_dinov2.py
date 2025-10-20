@@ -335,25 +335,26 @@ class DinoV2ForceEstimation:
 
         for epoch in range(1, self.args.num_epochs + 1):
             train_loss = self.train_epoch(epoch)
-            val_loss = self.evaluate(epoch)
-            
-            # Save best model
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                self.save_model(os.path.join(self.args.output_dir, "best_model.pt"))
-                self.patience_counter = 0
-                logger.info(f"New best model saved with validation loss: {val_loss:.4f}")
-            else:
-                self.patience_counter += 1
-                logger.info(f"No improvement for {self.patience_counter} epochs")
-            
-            # Early stopping
-            if self.args.patience > 0 and self.patience_counter >= self.args.patience:
-                logger.info(f"Early stopping triggered after {epoch} epochs")
-                break
             
             # Save checkpoint
             if epoch % self.args.checkpoint_interval == 0:
+                val_loss = self.evaluate(epoch)
+            
+                # Save best model
+                if val_loss < self.best_val_loss:
+                    self.best_val_loss = val_loss
+                    self.save_model(os.path.join(self.args.output_dir, "best_model.pt"))
+                    self.patience_counter = 0
+                    logger.info(f"New best model saved with validation loss: {val_loss:.4f}")
+                else:
+                    self.patience_counter += 1
+                    logger.info(f"No improvement for {self.patience_counter} epochs")
+                
+                # Early stopping
+                if self.args.patience > 0 and self.patience_counter >= self.args.patience:
+                    logger.info(f"Early stopping triggered after {epoch} epochs")
+                    break
+
                 self.save_model(os.path.join(self.args.output_dir, f"checkpoint_epoch_{epoch}.pt"))
         
         logger.info("Finetuning complete!")
@@ -375,7 +376,7 @@ def parse_args():
                         help="Name of the pretrained DINOv2 model to use")
     parser.add_argument("--batch_size", type=int, default=64,
                         help="Batch size for training")
-    parser.add_argument("--num_epochs", type=int, default=30,
+    parser.add_argument("--num_epochs", type=int, default=600,
                         help="Number of epochs to train for")
     parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate for the optimizer")
@@ -385,11 +386,11 @@ def parse_args():
                         help="Directory to save model checkpoints")
     parser.add_argument("--log_interval", type=int, default=10,
                         help="How often to log training progress")
-    parser.add_argument("--checkpoint_interval", type=int, default=5,
+    parser.add_argument("--checkpoint_interval", type=int, default=30,
                         help="How often to save model checkpoints (in epochs)")
     parser.add_argument("--num_workers", type=int, default=4,
                         help="Number of workers for the data loaders")
-    parser.add_argument("--patience", type=int, default=10,
+    parser.add_argument("--patience", type=int, default=0,
                         help="Early stopping patience (0 to disable)")
     parser.add_argument("--resume_from", type=str, default="",
                         help="Path to a checkpoint to resume training from")
@@ -397,7 +398,7 @@ def parse_args():
                         help="Whether to use Weights & Biases for logging")
     parser.add_argument("--wandb_project", type=str, default="tactile_force_estimation_dinov2",
                         help="W&B project name")
-    parser.add_argument("--wandb_run_name", type=str, default="dinov2-force-estimation",
+    parser.add_argument("--wandb_run_name", type=str, default="dinov2-force-estimation-data0.01",
                         help="W&B run name")
     
     return parser.parse_args()
